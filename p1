@@ -1,0 +1,29 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/java-ci-cd.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t simpleapp .'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml simpleapp'
+            }
+        }
+    }
+}
