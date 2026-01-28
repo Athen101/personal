@@ -1,0 +1,313 @@
+lab 10 11
+Below is a **clean, simple, error-free Flask version**, written exactly in the style examiners expect.
+
+---
+
+# ✅ 1. Flask + Docker Swarm
+
+## Manual / On-Demand CI/CD Pipeline
+
+(**Complete, clear, working steps**)
+
+---
+
+## 🔹 What this pipeline does
+
+You **manually click “Build Now”** in Jenkins.
+
+Jenkins will:
+
+1. Pull Flask code from GitHub
+2. Build a Docker image
+3. Containerize the Flask app
+4. Deploy it on **Docker Swarm**
+
+---
+
+## STEP 1: Install required tools (Linux)
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io python3 python3-pip jenkins
+```
+
+Docker permissions:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+Verify:
+
+```bash
+docker --version
+python3 --version
+```
+
+---
+
+## STEP 2: Initialize Docker Swarm
+
+```bash
+docker swarm init
+```
+
+Verify:
+
+```bash
+docker node ls
+```
+
+---
+
+## STEP 3: Create a simple Flask application
+
+```bash
+mkdir flask-ci-cd
+cd flask-ci-cd
+```
+
+### `app.py`
+
+```python
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/")
+def hello():
+    return "Hello from Flask CI/CD Pipeline"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+```
+
+### `requirements.txt`
+
+```text
+flask
+```
+
+Test locally:
+
+```bash
+pip3 install flask
+python3 app.py
+```
+
+Open:
+
+```
+http://localhost:5000
+```
+
+Stop with **Ctrl + C**
+
+---
+
+## STEP 4: Dockerfile (Flask)
+
+### `Dockerfile`
+
+```dockerfile
+FROM python:3.10-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app.py .
+EXPOSE 5000
+CMD ["python", "app.py"]
+```
+
+---
+
+## STEP 5: Docker Swarm deployment file
+
+### `docker-compose.yml`
+
+```yaml
+version: "3.8"
+
+services:
+  flask-app:
+    image: flask-swarm-app
+    ports:
+      - "5000:5000"
+    deploy:
+      replicas: 2
+```
+
+---
+
+## STEP 6: Push code to GitHub
+
+```bash
+git init
+git add .
+git commit -m "Flask Docker Swarm manual pipeline"
+git branch -M main
+git remote add origin https://github.com/<your-username>/flask-ci-cd.git
+git push -u origin main
+```
+
+---
+
+## STEP 7: Jenkinsfile (Manual / On-Demand)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/flask-ci-cd.git'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t flask-swarm-app .'
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml flaskapp'
+            }
+        }
+    }
+}
+```
+
+---
+
+## STEP 8: Create Jenkins Job
+
+1. Jenkins → **New Item**
+2. Name: `flask-swarm-manual`
+3. Type: **Pipeline**
+4. Pipeline script from SCM → Git
+5. Repository URL → your GitHub repo
+6. Script path → `Jenkinsfile`
+7. Save
+8. Click **Build Now**
+
+---
+
+## STEP 9: Verify deployment
+
+```bash
+docker service ls
+docker service ps flaskapp_flask-app
+```
+
+Open browser:
+
+```
+http://<server-ip>:5000
+```
+
+You should see:
+
+```
+Hello from Flask CI/CD Pipeline
+```
+
+---
+
+## 🔍 Pipeline Stage Explanation (Manual)
+
+| Stage        | Explanation                           |
+| ------------ | ------------------------------------- |
+| Clone        | Jenkins pulls Flask code from GitHub  |
+| Docker Build | Docker image is created               |
+| Deploy       | Flask app is deployed to Docker Swarm |
+
+---
+
+# ✅ 2. Flask + Docker Swarm
+
+## Cron-Based Automated CI/CD Pipeline
+
+(**ONLY changes needed**)
+
+✔ **Steps are exactly the same as Pipeline 1**
+
+---
+
+## 🔁 Change 1: Add cron trigger in Jenkinsfile
+
+### Updated `Jenkinsfile` (only difference)
+
+```groovy
+pipeline {
+    agent any
+
+    triggers {
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/flask-ci-cd.git'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t flask-swarm-app .'
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml flaskapp'
+            }
+        }
+    }
+}
+```
+
+---
+
+## 🔁 What changed?
+
+| Manual Pipeline | Cron-Based Pipeline |
+| --------------- | ------------------- |
+| Build Now       | Automatic execution |
+| User-triggered  | Time-triggered      |
+| On-demand       | Fully automated     |
+
+### Cron expression:
+
+```
+H/5 * * * *
+```
+
+➡ Runs **every 5 minutes automatically**
+
+---
+
+## 🔍 Automated Pipeline Stage Explanation
+
+| Stage  | Explanation                        |
+| ------ | ---------------------------------- |
+| Clone  | Jenkins automatically pulls code   |
+| Build  | Docker image built automatically   |
+| Deploy | Docker Swarm updated automatically |
+
+---
+
+## ✅ Final Exam-Ready Summary
+
+> The manual pipeline requires user intervention to start the build, while the cron-based pipeline automatically builds, containerizes, and deploys the Flask application to Docker Swarm at scheduled intervals using Jenkins cron triggers.
+
+---
+

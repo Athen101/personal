@@ -1,0 +1,334 @@
+lab8 9 **Kubernetes**, and **using React instead of Java/Maven**.
+
+Also:
+
+* **Manual / On-demand pipeline → full clear steps**
+* **Cron-based automated pipeline → only changes**, because steps are the same
+
+I’ll do **exactly that**, clean and exam-friendly.
+
+---
+
+# ✅ 1. React + Kubernetes
+
+## Manual / On-Demand CI/CD Pipeline
+
+(**Complete clear working steps**)
+
+---
+
+## 🔹 What this pipeline does
+
+* You **manually trigger** Jenkins (Build Now)
+* Jenkins:
+
+  1. Pulls React code from GitHub
+  2. Builds the React app
+  3. Creates Docker image
+  4. Deploys it to **Kubernetes**
+
+---
+
+## STEP 1: Install required tools (Linux)
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io nodejs npm jenkins kubectl minikube
+```
+
+Docker permissions:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+---
+
+## STEP 2: Start Kubernetes (Minikube)
+
+```bash
+minikube start --driver=docker
+```
+
+Verify:
+
+```bash
+kubectl get nodes
+```
+
+---
+
+## STEP 3: Create a simple React app
+
+```bash
+npx create-react-app react-k8s
+cd react-k8s
+```
+
+Edit React code:
+
+### `src/App.js`
+
+```javascript
+function App() {
+  return (
+    <div>
+      <h1>Hello from React Kubernetes CI/CD Pipeline</h1>
+    </div>
+  );
+}
+
+export default App;
+```
+
+Test once:
+
+```bash
+npm start
+```
+
+Stop with **Ctrl + C**
+
+---
+
+## STEP 4: Dockerfile (React app)
+
+### `Dockerfile`
+
+```dockerfile
+# Build stage
+FROM node:18 AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Run stage
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+---
+
+## STEP 5: Kubernetes deployment file
+
+### `deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: react-app
+  template:
+    metadata:
+      labels:
+        app: react-app
+    spec:
+      containers:
+      - name: react-app
+        image: react-k8s-app
+        imagePullPolicy: Never
+```
+
+---
+
+## STEP 6: Push project to GitHub
+
+```bash
+git init
+git add .
+git commit -m "React Kubernetes manual pipeline"
+git branch -M main
+git remote add origin https://github.com/<your-username>/react-k8s.git
+git push -u origin main
+```
+
+---
+
+## STEP 7: Jenkinsfile (Manual / On-Demand)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/react-k8s.git'
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t react-k8s-app .'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f deployment.yaml'
+            }
+        }
+    }
+}
+```
+
+---
+
+## STEP 8: Create Jenkins job
+
+1. Jenkins → **New Item**
+2. Name: `react-k8s-manual`
+3. Type: **Pipeline**
+4. Pipeline script from SCM → Git
+5. Repository URL → GitHub repo
+6. Script path → `Jenkinsfile`
+7. Save
+
+▶ Click **Build Now**
+
+---
+
+## STEP 9: Verify deployment
+
+```bash
+kubectl get pods
+kubectl logs -l app=react-app
+```
+
+Access app:
+
+```bash
+minikube service react-app
+```
+
+You should see:
+
+```
+Hello from React Kubernetes CI/CD Pipeline
+```
+
+---
+
+## 🔍 Pipeline Stage Explanation (Manual)
+
+| Stage        | Explanation                     |
+| ------------ | ------------------------------- |
+| Clone        | Jenkins pulls React source code |
+| Build        | React app is built using npm    |
+| Docker Build | Docker image is created         |
+| Deploy       | App is deployed to Kubernetes   |
+
+---
+
+# ✅ 2. React + Kubernetes
+
+## Cron-Based Automated CI/CD Pipeline
+
+(**ONLY changes needed**)
+
+You are **absolutely correct** —
+👉 **Steps are the same as Pipeline 1**
+
+---
+
+## 🔁 Change 1: Modify Jenkinsfile (add cron trigger)
+
+### Updated `Jenkinsfile` (ONLY change)
+
+```groovy
+pipeline {
+    agent any
+
+    triggers {
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/react-k8s.git'
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t react-k8s-app .'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f deployment.yaml'
+            }
+        }
+    }
+}
+```
+
+---
+
+## 🔁 What changed?
+
+| Manual Pipeline | Cron-Based Pipeline        |
+| --------------- | -------------------------- |
+| Build Now       | Jenkins runs automatically |
+| User-triggered  | Time-triggered             |
+| On-demand       | Fully automated            |
+
+### Cron meaning:
+
+```
+H/5 * * * *
+```
+
+➡ Runs **every 5 minutes automatically**
+
+---
+
+## 🔍 Automated Pipeline Stage Explanation
+
+> The stages remain the same; only the trigger changes.
+
+| Stage        | Explanation                      |
+| ------------ | -------------------------------- |
+| Clone        | Jenkins automatically pulls code |
+| Build        | React app built automatically    |
+| Docker Build | Image created automatically      |
+| Deploy       | Kubernetes deployment updated    |
+
+---
+
+## ✅ Final One-Line Exam Answer
+
+> In the manual pipeline, Jenkins executes the CI/CD process only when triggered by the user, whereas in the cron-based pipeline Jenkins automatically builds, containerizes, and deploys the React application to Kubernetes at scheduled intervals.
+
+---
+

@@ -1,0 +1,330 @@
+lab6
+*only real difference is how Jenkins is triggered**.
+
+Below I’ll do exactly what you asked:
+
+---
+
+#  1. React + Docker Swarm
+
+## Manual / On-Demand CI/CD Pipeline
+
+(**Complete, clear, working steps**)
+
+---
+
+## 🔹 What this pipeline does
+
+* You **manually click “Build Now”** in Jenkins
+* Jenkins:
+
+  1. Pulls React code from GitHub
+  2. Builds the React app
+  3. Creates a Docker image
+  4. Deploys it to **Docker Swarm**
+
+---
+
+## STEP 1: Install required tools (Linux)
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io nodejs npm jenkins
+```
+
+Docker permissions:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+Verify:
+
+```bash
+node -v
+npm -v
+docker --version
+```
+
+---
+
+## STEP 2: Initialize Docker Swarm
+
+```bash
+docker swarm init
+```
+
+Check:
+
+```bash
+docker node ls
+```
+
+---
+
+## STEP 3: Create a simple React app
+
+```bash
+npx create-react-app react-swarm
+cd react-swarm
+```
+
+Edit the React code:
+
+### `src/App.js`
+
+```javascript
+function App() {
+  return (
+    <div>
+      <h1>Hello from React CI/CD Pipeline</h1>
+    </div>
+  );
+}
+
+export default App;
+```
+
+Test once:
+
+```bash
+npm start
+```
+
+Stop with **Ctrl + C**
+
+---
+
+## STEP 4: Dockerfile (React app)
+
+### `Dockerfile`
+
+```dockerfile
+# Build stage
+FROM node:18 AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Run stage
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+---
+
+## STEP 5: Docker Swarm deployment file
+
+### `docker-compose.yml`
+
+```yaml
+version: "3.8"
+
+services:
+  react-app:
+    image: react-swarm-app
+    ports:
+      - "3000:80"
+    deploy:
+      replicas: 2
+```
+
+---
+
+## STEP 6: Push code to GitHub
+
+```bash
+git init
+git add .
+git commit -m "React Docker Swarm manual pipeline"
+git branch -M main
+git remote add origin https://github.com/<your-username>/react-swarm.git
+git push -u origin main
+```
+
+---
+
+## STEP 7: Jenkinsfile (Manual / On-Demand)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/react-swarm.git'
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t react-swarm-app .'
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml reactapp'
+            }
+        }
+    }
+}
+```
+
+---
+
+## STEP 8: Create Jenkins Job
+
+1. Jenkins → **New Item**
+2. Name: `react-swarm-manual`
+3. Type: **Pipeline**
+4. Pipeline script from SCM → Git
+5. Repo URL → your GitHub repo
+6. Script path → `Jenkinsfile`
+7. Save
+
+▶ Click **Build Now** (manual trigger)
+
+---
+
+## STEP 9: Verify deployment
+
+```bash
+docker service ls
+docker service ps reactapp_react-app
+```
+
+Open browser:
+
+```
+http://<server-ip>:3000
+```
+
+You should see:
+
+```
+Hello from React CI/CD Pipeline
+```
+
+---
+
+## 🔍 Pipeline Stage Explanation (Manual)
+
+| Stage           | Explanation                                   |
+| --------------- | --------------------------------------------- |
+| Clone           | Jenkins pulls React code from GitHub          |
+| Build React App | NPM installs dependencies and builds React    |
+| Docker Build    | Docker image is created                       |
+| Deploy          | Docker Swarm deploys containers with replicas |
+
+---
+
+# ✅ 2. React + Docker Swarm
+
+## Cron-Based Automated Pipeline
+
+(**ONLY changes needed**)
+
+You are **100% correct** —
+👉 **Steps are the same as Pipeline 1**
+
+### ❗ Only ONE thing changes
+
+---
+
+## 🔁 Change 1: Add cron trigger in Jenkinsfile
+
+Replace your Jenkinsfile with **this small change only**:
+
+```groovy
+pipeline {
+    agent any
+
+    triggers {
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/react-swarm.git'
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t react-swarm-app .'
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml reactapp'
+            }
+        }
+    }
+}
+```
+
+---
+
+## 🔁 What changed?
+
+| Manual Pipeline     | Cron-Based Pipeline        |
+| ------------------- | -------------------------- |
+| Click **Build Now** | Jenkins runs automatically |
+| Human-triggered     | Time-based trigger         |
+| On demand           | Fully automated            |
+
+### Cron meaning:
+
+```
+H/5 * * * *
+```
+
+➡ Runs **every 5 minutes automatically**
+
+---
+
+## 🔍 Automated Pipeline Stage Explanation
+
+> The stages remain the same; only the trigger changes.
+
+| Stage        | Explanation                      |
+| ------------ | -------------------------------- |
+| Clone        | Jenkins automatically pulls code |
+| Build        | React app built automatically    |
+| Docker Build | Image created automatically      |
+| Deploy       | Swarm updated automatically      |
+
+---
+
+##  Final One-Line Summary (Exam-Ready)
+
+> The manual pipeline requires user interaction to start the build, while the cron-based pipeline uses Jenkins scheduling to automatically build, containerize, and deploy the React application to Docker Swarm.
+
+
