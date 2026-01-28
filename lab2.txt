@@ -1,0 +1,302 @@
+lab2: step by step and build a fully automated CI/CD pipeline with cron-based Jenkins triggers, Maven + Java, Docker containerization, and Docker Swarm deployment.
+
+
+---
+ Cron-Based Automated CI/CD Pipeline — Step-by-Step
+
+
+---
+
+Step 1: Install required tools
+
+sudo apt update
+sudo apt install -y git maven docker.io openjdk-21-jdk jenkins
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+
+Verify:
+
+java -version
+mvn -version
+docker --version
+git --version
+
+> This ensures both your user and jenkins user can run Docker commands.
+
+
+
+
+---
+
+Step 2: Initialize Docker Swarm
+
+docker swarm init
+
+This is required to deploy containers via Docker Swarm stack.
+
+
+
+---
+
+Step 3: Create project structure
+
+mkdir java-ci-cd
+cd java-ci-cd
+mkdir -p src/main/java/com/example
+
+
+---
+
+Step 4: Create simple Java program
+
+src/main/java/com/example/App.java
+
+package com.example;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        System.out.println("Hello from automated CI/CD pipeline");
+
+        // Keep the container alive
+        while(true) {
+            Thread.sleep(5000);
+        }
+    }
+}
+
+
+---
+
+Step 5: Create Maven pom.xml
+
+pom.xml
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="
+           http://maven.apache.org/POM/4.0.0
+           http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example</groupId>
+  <artifactId>simple-app</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+  </properties>
+
+  <build>
+    <plugins>
+      <!-- Compile Java -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+      </plugin>
+
+      <!-- Create executable JAR -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.example.App</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
+
+
+---
+
+Step 6: Build manually to verify
+
+mvn clean package
+java -jar target/simple-app-1.0.jar
+
+Output: Hello from automated CI/CD pipeline
+
+Press Ctrl + C after verifying
+
+
+
+---
+
+Step 7: Create Dockerfile
+
+Dockerfile
+
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY target/simple-app-1.0.jar app.jar
+CMD ["java", "-jar", "app.jar"]
+
+
+---
+
+Step 8: Create Docker Swarm deployment file
+
+docker-compose.yml
+
+version: "3.8"
+
+services:
+  app:
+    image: simpleapp
+    deploy:
+      replicas: 2
+
+This tells Docker Swarm to run 2 replicas of your container.
+
+
+
+---
+
+Step 9: Push code to GitHub
+
+git init
+git add .
+git commit -m "Initial automated CI/CD setup"
+git branch -M main
+git remote add origin https://github.com/<your-username>/java-ci-cd.git
+git push -u origin main
+
+
+---
+
+Step 10: Create Jenkins pipeline
+
+Jenkinsfile
+
+pipeline {
+    agent any
+
+    triggers {
+        // Cron trigger: run every 5 minutes (adjust as needed)
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/java-ci-cd.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t simpleapp .'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml simpleapp'
+            }
+        }
+    }
+}
+
+Explanation of automated stages:
+
+Stage	What happens automatically
+
+Clone	Jenkins pulls latest code from GitHub every 5 minutes (cron)
+Build	Maven compiles Java code and packages executable JAR
+Docker Build	Docker builds container image from the JAR
+Deploy	Docker Swarm deploys 2 replicas automatically
+
+
+> This ensures a fully automated pipeline — no manual trigger needed. Cron triggers every 5 minutes (or adjust as needed).
+
+
+
+
+---
+
+Step 11: Configure Jenkins Job
+
+1. Open Jenkins → New Item → Pipeline
+
+
+2. Name it java-ci-cd-pipeline
+
+
+3. Pipeline → Pipeline script from SCM → Git
+
+
+4. Repo URL → your GitHub repository
+
+
+5. Script path → Jenkinsfile
+
+
+6. Save
+
+
+
+Jenkins will now automatically trigger the pipeline based on cron
+
+
+
+---
+
+Step 12: Verify deployment
+
+docker service ls
+docker service ps simpleapp_app
+docker service logs simpleapp_app
+
+You should see 2 running replicas
+
+Logs should show: Hello from automated CI/CD pipeline repeatedly
+
+
+
+---
+
+✅ Key Notes
+
+1. Docker + Jenkins permissions: Jenkins user must be in docker group
+
+
+2. Cron schedule: 'H/5 * * * *' → runs every 5 minutes randomly within the interval for load balancing
+
+
+3. Thread in Java: Keeps container alive for Swarm
+
+
+4. Automated pipeline: Fully hands-off — Jenkins triggers, builds, packages, Dockerizes, and deploys
+
+
+
+
+---
+
+This is now a complete working cron-based automated CI/CD pipeline using:
+
+Java + Maven
+
+Git/GitHub
+
+Jenkins
+
+Docker + Docker Swarm
+

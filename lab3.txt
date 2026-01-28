@@ -1,0 +1,330 @@
+lab3: clean, correct, manual/on-demand CI/CD steps** for:
+
+**Maven + Java + Jenkins + Docker + Kubernetes**
+✔ Simple
+✔ Manual trigger (Build Now)
+✔ No unnecessary complexity
+✔ Designed to **avoid the errors you faced earlier**
+
+OVERVIEW (What you are building)
+
+* A **simple Java app** built with **Maven**
+* Jenkins pipeline triggered **manually**
+* Docker image built from the JAR
+* App deployed to **Kubernetes** (using `kubectl`)
+* You verify it step by step
+
+---
+
+# STEP 1: Install required tools (Linux)
+
+```bash
+sudo apt update
+sudo apt install -y git maven docker.io openjdk-21-jdk
+```
+
+Install Jenkins:
+
+```bash
+sudo apt install -y jenkins
+sudo systemctl start jenkins
+sudo systemctl enable jenkins
+```
+
+Install kubectl:
+
+```bash
+sudo apt install -y kubectl
+```
+
+Add users to docker group:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+Verify:
+
+```bash
+java -version
+mvn -version
+docker --version
+kubectl version --client
+```
+
+---
+
+# STEP 2: Set up Kubernetes (local – simple)
+
+Use **Minikube** (recommended for learning):
+
+```bash
+sudo apt install -y minikube
+minikube start --driver=docker
+```
+
+Check:
+
+```bash
+kubectl get nodes
+```
+
+You should see **Ready**.
+
+---
+
+# STEP 3: Create project structure
+
+```bash
+mkdir java-k8s-ci-cd
+cd java-k8s-ci-cd
+mkdir -p src/main/java/com/example
+```
+
+---
+
+# STEP 4: Simple Java program
+
+### `src/main/java/com/example/App.java`
+
+```java
+package com.example;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        System.out.println("Hello from Kubernetes CI/CD pipeline");
+
+        while (true) {
+            Thread.sleep(5000);
+        }
+    }
+}
+```
+
+✔ Keeps container running
+✔ Simple
+✔ No unnecessary logic
+
+---
+
+# STEP 5: Maven `pom.xml`
+
+### `pom.xml`
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example</groupId>
+  <artifactId>simple-app</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.example.App</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
+```
+
+Test locally:
+
+```bash
+mvn clean package
+java -jar target/simple-app-1.0.jar
+```
+
+Press **Ctrl+C** to stop.
+
+---
+
+# STEP 6: Dockerfile
+
+### `Dockerfile`
+
+```dockerfile
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY target/simple-app-1.0.jar app.jar
+CMD ["java", "-jar", "app.jar"]
+```
+
+---
+
+# STEP 7: Kubernetes Deployment YAML
+
+### `deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: simple-app
+  template:
+    metadata:
+      labels:
+        app: simple-app
+    spec:
+      containers:
+      - name: simple-app
+        image: simpleapp:latest
+        imagePullPolicy: Never
+```
+
+> `imagePullPolicy: Never` is **important** for local Minikube builds.
+
+---
+
+# STEP 8: Push project to GitHub
+
+```bash
+git init
+git add .
+git commit -m "Initial Kubernetes CI/CD setup"
+git branch -M main
+git remote add origin https://github.com/<your-username>/java-k8s-ci-cd.git
+git push -u origin main
+```
+
+---
+
+# STEP 9: Jenkinsfile (Manual / On-Demand)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/java-k8s-ci-cd.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t simpleapp .'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f deployment.yaml'
+            }
+        }
+    }
+}
+```
+
+✔ Manual trigger
+✔ No cron
+✔ No auto-deploy
+✔ Clean and safe
+
+---
+
+# STEP 10: Configure Jenkins Job
+
+1. Jenkins → **New Item**
+2. Name: `java-k8s-pipeline`
+3. Type: **Pipeline**
+4. Pipeline → **Pipeline script from SCM**
+5. SCM: Git
+6. Repo URL: GitHub repo
+7. Script Path: `Jenkinsfile`
+8. Save
+
+---
+
+# STEP 11: Run the pipeline (Manual)
+
+Click **Build Now**
+
+Pipeline stages execute:
+
+1. **Clone** → pulls code from GitHub
+2. **Build** → Maven compiles & creates JAR
+3. **Docker Build** → builds Docker image
+4. **Deploy** → Kubernetes deployment created/updated
+
+---
+
+# STEP 12: Verify Kubernetes deployment
+
+```bash
+kubectl get pods
+kubectl logs -l app=simple-app
+```
+
+You should see:
+
+```
+Hello from Kubernetes CI/CD pipeline
+```
+
+---
+
+# PIPELINE STAGE EXPLANATION (Exam-ready)
+
+| Stage        | Explanation                                    |
+| ------------ | ---------------------------------------------- |
+| Clone        | Jenkins pulls latest code from GitHub          |
+| Build        | Maven compiles Java and creates executable JAR |
+| Docker Build | Docker image created from JAR                  |
+| Deploy       | Application deployed to Kubernetes cluster     |
+
+---
+
+# ✅ FINAL CONFIRMATION
+
+✔ Manual / On-demand pipeline
+✔ Maven-based Java app
+✔ Jenkins CI/CD
+✔ Docker containerization
+✔ Kubernetes deployment
+✔ Simple, stable, error-free setup
+
+

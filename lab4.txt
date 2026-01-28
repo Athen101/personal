@@ -1,0 +1,310 @@
+Alright 👍
+This is **Cron-based (fully automated)** version of **Maven + Java + Jenkins + Docker + Kubernetes**, written cleanly and safely so it **works without surprises** and is easy to explain in exams or demos.
+
+I’ll give you:
+
+1. Clear working steps
+2. Jenkins cron trigger
+3. Kubernetes deployment
+4. Explanation of **automated pipeline stages**
+
+---
+
+# ✅ Maven + Java + Kubernetes
+
+## Cron-Based Automated CI/CD Pipeline
+
+---
+
+## 1️⃣ What this pipeline does (high level)
+
+* Jenkins **automatically triggers** the pipeline using **cron**
+* Pulls Java code from GitHub
+* Builds it using **Maven**
+* Creates Docker image
+* Deploys automatically to **Kubernetes**
+
+👉 No manual “Build Now”
+
+---
+
+## 2️⃣ Prerequisites (one-time setup)
+
+Install tools:
+
+```bash
+sudo apt update
+sudo apt install -y git maven docker.io openjdk-21-jdk jenkins kubectl minikube
+```
+
+Docker permissions:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+Start Kubernetes (Minikube):
+
+```bash
+minikube start --driver=docker
+```
+
+Verify:
+
+```bash
+kubectl get nodes
+```
+
+---
+
+## 3️⃣ Create Java project structure
+
+```bash
+mkdir java-k8s-cron
+cd java-k8s-cron
+mkdir -p src/main/java/com/example
+```
+
+---
+
+## 4️⃣ Simple Java application
+
+### `src/main/java/com/example/App.java`
+
+```java
+package com.example;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        System.out.println("Hello from automated Kubernetes CI/CD pipeline");
+
+        while (true) {
+            Thread.sleep(5000);
+        }
+    }
+}
+```
+
+✔ Simple
+✔ Keeps container alive
+✔ No unnecessary complexity
+
+---
+
+## 5️⃣ Maven `pom.xml`
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example</groupId>
+  <artifactId>simple-app</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.example.App</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
+```
+
+Test once:
+
+```bash
+mvn clean package
+java -jar target/simple-app-1.0.jar
+```
+
+Press **Ctrl + C**.
+
+---
+
+## 6️⃣ Dockerfile
+
+```dockerfile
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY target/simple-app-1.0.jar app.jar
+CMD ["java", "-jar", "app.jar"]
+```
+
+---
+
+## 7️⃣ Kubernetes Deployment file
+
+### `deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: simple-app
+  template:
+    metadata:
+      labels:
+        app: simple-app
+    spec:
+      containers:
+      - name: simple-app
+        image: simpleapp:latest
+        imagePullPolicy: Never
+```
+
+---
+
+## 8️⃣ Push code to GitHub
+
+```bash
+git init
+git add .
+git commit -m "Cron based Kubernetes CI/CD"
+git branch -M main
+git remote add origin https://github.com/<your-username>/java-k8s-cron.git
+git push -u origin main
+```
+
+---
+
+## 9️⃣ Jenkinsfile (Cron-Based Automated)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    triggers {
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/java-k8s-cron.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t simpleapp .'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f deployment.yaml'
+            }
+        }
+    }
+}
+```
+
+### 🔹 Cron explanation:
+
+```
+H/5 * * * *
+```
+
+* Runs **every 5 minutes**
+* Fully automated
+* No manual trigger required
+
+---
+
+## 🔟 Configure Jenkins Job
+
+1. Jenkins → **New Item**
+2. Name: `java-k8s-cron-pipeline`
+3. Type: **Pipeline**
+4. Pipeline script from SCM
+5. Git repo URL
+6. Script path: `Jenkinsfile`
+7. Save
+
+👉 Jenkins now **runs automatically on schedule**
+
+---
+
+## 1️⃣1️⃣ Verify Kubernetes deployment
+
+```bash
+kubectl get pods
+kubectl logs -l app=simple-app
+```
+
+Output:
+
+```
+Hello from automated Kubernetes CI/CD pipeline
+```
+
+---
+
+# 📌 Automated Pipeline Stages Explanation
+
+| Stage        | Description                                  |
+| ------------ | -------------------------------------------- |
+| Clone        | Jenkins automatically pulls code from GitHub |
+| Build        | Maven compiles Java code and generates JAR   |
+| Docker Build | Docker image is created automatically        |
+| Deploy       | Kubernetes deployment updated automatically  |
+
+---
+
+# ✅ Difference from Manual Pipeline (1-line answer)
+
+> In a cron-based pipeline, Jenkins triggers the CI/CD process automatically at scheduled intervals, whereas a manual pipeline requires user interaction.
+
+---
+
+## ✅ Final Confirmation
+
+✔ Maven-based Java app
+✔ Jenkins cron-triggered automation
+✔ Docker containerization
+✔ Kubernetes deployment
+✔ Simple, stable, exam-ready
+
+

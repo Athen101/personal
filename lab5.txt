@@ -1,0 +1,263 @@
+lab5:clean, simple, fully automated (cron-based) CI/CD pipeline** for a **React application**, using **Git/GitHub, Jenkins, Docker**, and **Docker Swarm**.
+
+No charts, no extra complexity, only **working steps**.
+
+---
+
+# ✅ React + Docker Swarm
+
+## Cron-Based Automated CI/CD Pipeline
+
+---
+
+## 1️⃣ What this pipeline does
+
+* Jenkins **automatically triggers** the pipeline using a **cron schedule**
+* Pulls React code from GitHub
+* Builds the React app
+* Containerizes it using Docker
+* Deploys it automatically on **Docker Swarm**
+
+👉 No manual “Build Now”
+
+---
+
+## 2️⃣ Prerequisites (one-time setup)
+
+Install required tools:
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io jenkins nodejs npm
+```
+
+Docker permissions:
+
+```bash
+sudo usermod -aG docker $USER
+sudo usermod -aG docker jenkins
+newgrp docker
+sudo systemctl restart jenkins
+```
+
+Verify:
+
+```bash
+node -v
+npm -v
+docker --version
+```
+
+---
+
+## 3️⃣ Initialize Docker Swarm
+
+```bash
+docker swarm init
+```
+
+Verify:
+
+```bash
+docker node ls
+```
+
+---
+
+## 4️⃣ Create React application
+
+```bash
+npx create-react-app react-swarm-app
+cd react-swarm-app
+```
+
+Edit the main page to keep it simple:
+
+### `src/App.js`
+
+```javascript
+function App() {
+  return (
+    <div>
+      <h1>Hello from React CI/CD Pipeline</h1>
+    </div>
+  );
+}
+
+export default App;
+```
+
+Test locally:
+
+```bash
+npm start
+```
+
+Stop with **Ctrl + C**
+
+---
+
+## 5️⃣ Dockerfile (React production build)
+
+### `Dockerfile`
+
+```dockerfile
+# Build stage
+FROM node:18 AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Run stage
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+---
+
+## 6️⃣ Docker Swarm deployment file
+
+### `docker-compose.yml`
+
+```yaml
+version: "3.8"
+
+services:
+  react-app:
+    image: react-swarm-app
+    ports:
+      - "3000:80"
+    deploy:
+      replicas: 2
+```
+
+---
+
+## 7️⃣ Push project to GitHub
+
+```bash
+git init
+git add .
+git commit -m "React Docker Swarm automated pipeline"
+git branch -M main
+git remote add origin https://github.com/<your-username>/react-swarm-app.git
+git push -u origin main
+```
+
+---
+
+## 8️⃣ Jenkinsfile (Cron-Based Automated Pipeline)
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    triggers {
+        cron('H/5 * * * *')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                git 'https://github.com/<your-username>/react-swarm-app.git'
+            }
+        }
+
+        stage('Install & Build') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t react-swarm-app .'
+            }
+        }
+
+        stage('Deploy to Docker Swarm') {
+            steps {
+                sh 'docker stack deploy -c docker-compose.yml reactapp'
+            }
+        }
+    }
+}
+```
+
+### 🔹 Cron trigger meaning:
+
+```
+H/5 * * * *
+```
+
+* Pipeline runs **every 5 minutes automatically**
+* No human interaction needed
+
+---
+
+## 9️⃣ Configure Jenkins Job
+
+1. Jenkins → **New Item**
+2. Name: `react-swarm-cron-pipeline`
+3. Type: **Pipeline**
+4. Pipeline script from SCM
+5. SCM: Git
+6. Repository URL
+7. Script path: `Jenkinsfile`
+8. Save
+
+Jenkins will now **auto-run on schedule**.
+
+---
+
+## 🔟 Verify Docker Swarm deployment
+
+```bash
+docker service ls
+docker service ps reactapp_react-app
+```
+
+Open browser:
+
+```
+http://<server-ip>:3000
+```
+
+You should see:
+
+```
+Hello from React CI/CD Pipeline
+```
+
+---
+
+## 📌 Automated Pipeline Stages Explained
+
+| Stage           | What happens automatically                     |
+| --------------- | ---------------------------------------------- |
+| Clone           | Jenkins pulls latest React code from GitHub    |
+| Install & Build | NPM installs dependencies and builds React app |
+| Docker Build    | Docker image created from React build          |
+| Deploy          | Docker Swarm deploys and manages containers    |
+
+---
+
+## ✅ Final Summary
+
+✔ React application
+✔ Fully automated Jenkins cron pipeline
+✔ Docker containerization
+✔ Docker Swarm deployment
+✔ No manual trigger
+✔ Clean and production-style setup
+
+---
+
+
